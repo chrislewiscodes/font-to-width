@@ -205,6 +205,10 @@ FontToWidth.prototype.measureFonts = function() {
         spans.each(function(i) {
             var span = $(this);
             origwidths[i] = span.width();
+            if (origwidths[i] == 0) {
+                //font could not be loaded
+                origwidths[i] = -1;
+            }
             span.css('font-family', span.data('font-family') + ', AdobeBlank');
         });
         setTimeout(measurefunc, 50); //again allow a bit of time for the new fonts to take
