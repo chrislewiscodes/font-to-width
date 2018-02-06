@@ -1,7 +1,7 @@
 /*
- * FONT-TO-WIDTH FTW
+ * FONT-TO-WIDTH FTW 2.0
  *
- * Fits text to the width of an element using multiple font families of different widths.
+ * Fits text to the width of an element using variable-font 'wdth' axis or multiple font families of different widths.
  * 
  * Usage: 
  * <element>Text To Fit</element>
@@ -11,10 +11,11 @@
  * Multiple FontToWidth instances can be created using different font lists and elements.
  * Element can be any block or inline-block element.
  *
- * © 2014 Chris Lewis http://chrissam42.com and Nick Sherman http://nicksherman.com
+ * © 2018 Chris Lewis http://chrissam42.com and Nick Sherman http://nicksherman.com
  * Freely made available under the MIT license: http://opensource.org/licenses/MIT
  * 
  * CHANGELOG:
+ * 2018-02-05 Remove jQuery dependency; add support for variable fonts
  * 2015-02-28 Allow arbitrary CSS styles for each font
  * 2014-03-31 Initial release: minLetterSpace option; errs on the side of narrow spacing
  *
@@ -24,23 +25,24 @@
 'use strict';
 
 function hyphenToCamel (hyphen) {
-    switch (typeof hyphen) {
-    case "object":
-        $.each(hyphen, function(key, val) {
-            var newKey = hyphenToCamel(key);
-            if (key != newKey) {
-                hyphen[newKey] = val;
-                delete hyphen[key];
-            }
-        });
-        return hyphen;
-    
-    case "string":
-        return hyphen.replace(/-([a-z])/g, function(x, letter) { return letter.toUpperCase() });
-    
-    default:
-        return hyphen;
-    }
+	switch (typeof hyphen) {
+	case "object":
+	
+		$.each(hyphen, function(key, val) {
+			var newKey = hyphenToCamel(key);
+			if (key != newKey) {
+				hyphen[newKey] = val;
+				delete hyphen[key];
+			}
+		});
+		return hyphen;
+	
+	case "string":
+		return hyphen.replace(/-([a-z])/g, function(x, letter) { return letter.toUpperCase() });
+	
+	default:
+		return hyphen;
+	}
 }
 
 
@@ -57,318 +59,318 @@ function hyphenToCamel (hyphen) {
  
 var FontToWidth = function(options) {
 
-    // in case we were not called with "new"
-    if (!(this instanceof FontToWidth)) {
-        return new FontToWidth(options);
-    }
+	// in case we were not called with "new"
+	if (!(this instanceof FontToWidth)) {
+		return new FontToWidth(options);
+	}
 
-    //OPTIONS 
-    
-    //fill out fonts CSS with default settings
-    this.mode = "fonts";
-    if (!options.fonts) {
-        this.mode = "scale";
-        options.fonts = [ false ];
-    } else {
-        $.each(options.fonts, function(i, font) {
-            if (typeof font == "string") {
-                options.fonts[i] = font = { fontFamily: font };
-            }
-            hyphenToCamel(font);
-            font.fontWeight = font.fontWeight || 'normal';
-            font.fontStyle = font.fontStyle || 'normal';
-            if (font.fontSize) delete font.fontSize;
-        });
-    }
+	//OPTIONS 
+	
+	//fill out fonts CSS with default settings
+	this.mode = "fonts";
+	if (!options.fonts) {
+		this.mode = "scale";
+		options.fonts = [ false ];
+	} else {
+		$.each(options.fonts, function(i, font) {
+			if (typeof font == "string") {
+				options.fonts[i] = font = { fontFamily: font };
+			}
+			hyphenToCamel(font);
+			font.fontWeight = font.fontWeight || 'normal';
+			font.fontStyle = font.fontStyle || 'normal';
+			if (font.fontSize) delete font.fontSize;
+		});
+	}
 
-    options.elements = options.elements || '.ftw, .font-to-width, .fonttowidth';
-    options.minLetterSpace = typeof options.minLetterSpace === "number" ? options.minLetterSpace : -0.04;
-    options.minFontSize = options.minFontSize || (this.mode == "scale" ? 0.01 : 1.0);
-    options.maxFontSize = options.maxFontSize || (this.mode == "scale" ? 100 : 1.0);
-    options.preferredFit = options.preferredFit || "tight";
-    options.preferredFit = options.preferredSize || "large";
+	options.elements = options.elements || '.ftw, .font-to-width, .fonttowidth';
+	options.minLetterSpace = typeof options.minLetterSpace === "number" ? options.minLetterSpace : -0.04;
+	options.minFontSize = options.minFontSize || (this.mode == "scale" ? 0.01 : 1.0);
+	options.maxFontSize = options.maxFontSize || (this.mode == "scale" ? 100 : 1.0);
+	options.preferredFit = options.preferredFit || "tight";
+	options.preferredFit = options.preferredSize || "large";
 
-    this.measuringText = 'AVAWJ wimper QUILT jousting';
-    this.initialized = false;
-    this.ready = false;
-    this.options = options;
-    this.fontwidths = new Array(options.fonts.length);
-    this.allTheElements = $(options.elements);
+	this.measuringText = 'AVAWJ wimper QUILT jousting';
+	this.initialized = false;
+	this.ready = false;
+	this.options = options;
+	this.fontwidths = new Array(options.fonts.length);
+	this.allTheElements = $(options.elements);
 
-    this.allTheElements.each(function() {
-        var el = $(this);
-        el.css('white-space', 'nowrap');
-        el.data('ftw-original-style', el.attr('style'));
-        el.wrapInner("<span style='display:inline !important'></span>");
-    });
+	this.allTheElements.each(function() {
+		var el = $(this);
+		el.css('white-space', 'nowrap');
+		el.data('ftw-original-style', el.attr('style'));
+		el.wrapInner("<span style='display:inline !important'></span>");
+	});
 
-    $($.proxy(this.measureFonts,this)); 
+	$($.proxy(this.measureFonts,this)); 
 };
 
 FontToWidth.prototype.measureFonts = function() {
-    var ftw = this;
-    ftw.ready = false;
+	var ftw = this;
+	ftw.ready = false;
 
-    if (ftw.mode == "scale") {
-        ftw.ready = true;
-        ftw.startTheBallRolling();
-        return;
-    }
+	if (ftw.mode == "scale") {
+		ftw.ready = true;
+		ftw.startTheBallRolling();
+		return;
+	}
 
 	//add Adobe Blank @font-face
 	$('head').append('<style id="ftw-adobe-blank">@font-face { font-family: AdobeBlank; src: url("data:application/vnd.ms-fontobject;base64,' + ftw.eotData + '") format("embedded-opentype"), url("data:application/font-woff;base64,' + ftw.woffData + '") format("woff"); }</style>');
 
-    //create a hidden element to measure the relative widths of all the fonts
-    var div = ftw.measure_div = $("<div style='position:absolute;top:0px;right:101%;display:block;white-space:nowrap;'></div>");
+	//create a hidden element to measure the relative widths of all the fonts
+	var div = ftw.measure_div = $("<div style='position:absolute;top:0px;right:101%;display:block;white-space:nowrap;'></div>");
 
-    $.each(ftw.options.fonts, function(i, font) {
-        var span = $('<span style="outline:1px solid green;">' + ftw.measuringText + '</span>');
-        span.css({
-            'font-size': '36px',
-            'display': 'inline',
-        });
-        span.css(font);
-        
-        //first load up a default font
-        span.data('font-family', span.css('font-family'));
-        span.css('font-family', 'AdobeBlank');
-        
-        div.append(span);
-        div.append("<br>");
-    });
-    
-    $('body').append(div);
+	$.each(ftw.options.fonts, function(i, font) {
+		var span = $('<span style="outline:1px solid green;">' + ftw.measuringText + '</span>');
+		span.css({
+			'font-size': '36px',
+			'display': 'inline',
+		});
+		span.css(font);
+		
+		//first load up a default font
+		span.data('font-family', span.css('font-family'));
+		span.css('font-family', 'AdobeBlank');
+		
+		div.append(span);
+		div.append("<br>");
+	});
+	
+	$('body').append(div);
 
-    //keep re-measuring the widths until they've all changed
-    // Most browsers will load zero-width Adobe Blank
-    // But otherwise they will load fallback, so hopefully your font isn't the same width as Times New Roman
-    var tries = 60; 
-    var spans = ftw.measure_div.children('span');
-    var origwidths = new Array(ftw.fontwidths.length);
+	//keep re-measuring the widths until they've all changed
+	// Most browsers will load zero-width Adobe Blank
+	// But otherwise they will load fallback, so hopefully your font isn't the same width as Times New Roman
+	var tries = 60; 
+	var spans = ftw.measure_div.children('span');
+	var origwidths = new Array(ftw.fontwidths.length);
 
-    var measurefunc = function() {
+	var measurefunc = function() {
 
-        if (--tries < 0) {
-            console.log("Giving up!");
-            clearInterval(ftw.measuretimeout);
-            $('#ftw-adobe-blank').remove();
-            return;
-        }
+		if (--tries < 0) {
+			console.log("Giving up!");
+			clearInterval(ftw.measuretimeout);
+			$('#ftw-adobe-blank').remove();
+			return;
+		}
 
-        var allLoaded = true;
-        spans.each(function(i) {
-            var span = $(this);
-            ftw.fontwidths[i] = span.width();
-            if (ftw.fontwidths[i] == origwidths[i]) {
-                allLoaded = false;
-                return false;
-            }
-        });
+		var allLoaded = true;
+		spans.each(function(i) {
+			var span = $(this);
+			ftw.fontwidths[i] = span.width();
+			if (ftw.fontwidths[i] == origwidths[i]) {
+				allLoaded = false;
+				return false;
+			}
+		});
 
-        console.log("Measured", Date.now()/1000, ftw.fontwidths);
-        
-        if (allLoaded) {
-            ftw.ready = true;
-            clearInterval(ftw.measuretimeout);
+		console.log("Measured", Date.now()/1000, ftw.fontwidths);
+		
+		if (allLoaded) {
+			ftw.ready = true;
+			clearInterval(ftw.measuretimeout);
 
-            //sort the font list widest first
-            var font2width = new Array(ftw.options.fonts.length);
-            $.each(ftw.fontwidths, function(i, mywidth) {
-                font2width[i] = {index: i, width: mywidth};
-            });
-            
-            font2width.sort(function(b,a) { 
-                if (a.width < b.width)
-                    return -1;
-                if (a.width > b.width)
-                    return 1;
-                return 0;
-            });
-            
-            var newfonts = new Array(font2width.length);
-            $.each(font2width, function(i, font) {
-                newfonts[i] = ftw.options.fonts[font.index];
-            });
-            
-            ftw.options.fonts = newfonts;
+			//sort the font list widest first
+			var font2width = new Array(ftw.options.fonts.length);
+			$.each(ftw.fontwidths, function(i, mywidth) {
+				font2width[i] = {index: i, width: mywidth};
+			});
+			
+			font2width.sort(function(b,a) { 
+				if (a.width < b.width)
+					return -1;
+				if (a.width > b.width)
+					return 1;
+				return 0;
+			});
+			
+			var newfonts = new Array(font2width.length);
+			$.each(font2width, function(i, font) {
+				newfonts[i] = ftw.options.fonts[font.index];
+			});
+			
+			ftw.options.fonts = newfonts;
 
-            ftw.measure_div.remove();
-            $('#ftw-adobe-blank').remove();
+			ftw.measure_div.remove();
+			$('#ftw-adobe-blank').remove();
 
-            ftw.startTheBallRolling();
-        }
-        
-    };
-    
-    //measure the initial width and then restore the font-family
-    setTimeout(function() {
-        spans.each(function(i) {
-            var span = $(this);
-            origwidths[i] = span.width();
-            span.css('font-family', span.data('font-family') + ', AdobeBlank');
-        });
-        setTimeout(measurefunc, 50); //again allow a bit of time for the new fonts to take
-        ftw.measuretimeout = setInterval(measurefunc, 500);
-    }, 10); //it takes a few milliseconds for fonts to be applied after they're loaded
+			ftw.startTheBallRolling();
+		}
+		
+	};
+	
+	//measure the initial width and then restore the font-family
+	setTimeout(function() {
+		spans.each(function(i) {
+			var span = $(this);
+			origwidths[i] = span.width();
+			span.css('font-family', span.data('font-family') + ', AdobeBlank');
+		});
+		setTimeout(measurefunc, 50); //again allow a bit of time for the new fonts to take
+		ftw.measuretimeout = setInterval(measurefunc, 500);
+	}, 10); //it takes a few milliseconds for fonts to be applied after they're loaded
 
 };
 
 FontToWidth.prototype.startTheBallRolling = function() {
-    var ftw = this;
+	var ftw = this;
 
-    //only do this stuff once
-    if (ftw.initialized)
-        return;
-        
-    ftw.initialized = true;
-    
-    var updatewidths = $.proxy(ftw.updateWidths, ftw);
-    
-    //update widths right now
-    $(updatewidths);
-    
-    //update widths on window load and resize (delayed)
-    var resizetimeout;
-    $(window).on('load', updatewidths).on('resize', function() { 
-        if (resizetimeout) 
-            clearTimeout(resizetimeout);
-        resizetimeout = setTimeout(updatewidths, 250);
-    });
+	//only do this stuff once
+	if (ftw.initialized)
+		return;
+		
+	ftw.initialized = true;
+	
+	var updatewidths = $.proxy(ftw.updateWidths, ftw);
+	
+	//update widths right now
+	$(updatewidths);
+	
+	//update widths on window load and resize (delayed)
+	var resizetimeout;
+	$(window).on('load', updatewidths).on('resize', function() { 
+		if (resizetimeout) 
+			clearTimeout(resizetimeout);
+		resizetimeout = setTimeout(updatewidths, 250);
+	});
 
-    //update on live text change
-    /*
-    ftw.allTheElements.on('keyup',function() {
-        //similar to updateWidths() below, but different enough to implement separately
-        var cell = $(this);
-        cell.removeClass('ftw_done');
-        
-        var i, fontfamily;
-        for (i in ftw.options.fonts) { 
-            fontfamily = ftw.options.fonts[i];
-    
-            cell.css({'font-family': fontfamily, 'letter-spacing': ''});
-            cell.each(ftw.updateSingleWidth);
-            if (cell.hasClass('ftw_done')) {
-                break;
-            }
-        }
-    });
-    */
+	//update on live text change
+	/*
+	ftw.allTheElements.on('keyup',function() {
+		//similar to updateWidths() below, but different enough to implement separately
+		var cell = $(this);
+		cell.removeClass('ftw_done');
+		
+		var i, fontfamily;
+		for (i in ftw.options.fonts) { 
+			fontfamily = ftw.options.fonts[i];
+	
+			cell.css({'font-family': fontfamily, 'letter-spacing': ''});
+			cell.each(ftw.updateSingleWidth);
+			if (cell.hasClass('ftw_done')) {
+				break;
+			}
+		}
+	});
+	*/
 };
 
 FontToWidth.prototype.updateWidths = function() {
-    var ftw = this;
-    
-    if (!ftw.ready) return;
-    
-    ftw.options.avgFontSize = (ftw.options.maxFontSize + ftw.options.minFontSize)/2;
-    
-    var starttime = Date.now();
-    
-    ftw.ready = false;
+	var ftw = this;
+	
+	if (!ftw.ready) return;
+	
+	ftw.options.avgFontSize = (ftw.options.maxFontSize + ftw.options.minFontSize)/2;
+	
+	var starttime = Date.now();
+	
+	ftw.ready = false;
 
-    ftw.stillToDo = $(ftw.allTheElements).removeClass('ftw_done ftw_final ftw_onemore');
+	ftw.stillToDo = $(ftw.allTheElements).removeClass('ftw_done ftw_final ftw_onemore');
 
-    //doing this in waves is much faster, since we update all the fonts at once, then do only one repaint per font
-    // as opposed to one repaint for every element
+	//doing this in waves is much faster, since we update all the fonts at once, then do only one repaint per font
+	// as opposed to one repaint for every element
 
-    var updateSingleWidth = function(i, el) {
-        var cell = $(el);
-        var span = cell.children('span');
+	var updateSingleWidth = function(i, el) {
+		var cell = $(el);
+		var span = cell.children('span');
 
-        var ontrial = cell.hasClass('ftw_onemore');
-        var success = false;
+		var ontrial = cell.hasClass('ftw_onemore');
+		var success = false;
 
-        var fullwidth = cell.width();
-        var textwidth = span.outerWidth();
-        var lettercount = span.text().length-1; //this will probably get confused with fancy unicode text
-        var fontsize = parseFloat(cell.css('font-size'));
+		var fullwidth = cell.width();
+		var textwidth = span.outerWidth();
+		var lettercount = span.text().length-1; //this will probably get confused with fancy unicode text
+		var fontsize = parseFloat(cell.css('font-size'));
 
-        //if this is a borderline fit
-        var onemore = false;
+		//if this is a borderline fit
+		var onemore = false;
 
-        //first try nudging the font size
-        var newfontsize=fontsize, oldfontsize=fontsize, ratioToFit = fullwidth/textwidth;
-        
-        //for the widest font, we can max out the size
-        if (cell.data('biggest-font') && ratioToFit > ftw.options.maxFontSize) {
-            ratioToFit = ftw.options.maxFontSize;
-        }
-        
-        if (ratioToFit != 1 && ratioToFit >= ftw.options.minFontSize && ratioToFit <= ftw.options.maxFontSize) {
-            //adjust the font size and then nudge letterspacing on top of that
-            newfontsize = Math.round(fontsize * ratioToFit);
-            cell.css('font-size', newfontsize + 'px');
-            textwidth *= newfontsize/fontsize;
-            fontsize = newfontsize;
+		//first try nudging the font size
+		var newfontsize=fontsize, oldfontsize=fontsize, ratioToFit = fullwidth/textwidth;
+		
+		//for the widest font, we can max out the size
+		if (cell.data('biggest-font') && ratioToFit > ftw.options.maxFontSize) {
+			ratioToFit = ftw.options.maxFontSize;
+		}
+		
+		if (ratioToFit != 1 && ratioToFit >= ftw.options.minFontSize && ratioToFit <= ftw.options.maxFontSize) {
+			//adjust the font size and then nudge letterspacing on top of that
+			newfontsize = Math.round(fontsize * ratioToFit);
+			cell.css('font-size', newfontsize + 'px');
+			textwidth *= newfontsize/fontsize;
+			fontsize = newfontsize;
 
-            if (ftw.mode == "fonts" && ratioToFit < ftw.options.avgFontSize) {
-                if (ftw.options.preferredSize=="small") {
-                    success = true;
-                } else {
-                    onemore = true;
-                }
-            } else {
-                //if it grew we have to stop
-                success = true;
-            }
-        }
-    
-        var letterspace = (fullwidth-textwidth)/lettercount/fontsize;
+			if (ftw.mode == "fonts" && ratioToFit < ftw.options.avgFontSize) {
+				if (ftw.options.preferredSize=="small") {
+					success = true;
+				} else {
+					onemore = true;
+				}
+			} else {
+				//if it grew we have to stop
+				success = true;
+			}
+		}
+	
+		var letterspace = (fullwidth-textwidth)/lettercount/fontsize;
 
-        if (letterspace >= ftw.options.minLetterSpace || newfontsize != oldfontsize || cell.hasClass('ftw_final')) {
-            //adjust letter spacing to fill the width
-            cell.css('letter-spacing', Math.max(letterspace, ftw.options.minLetterSpace) + 'em');
+		if (letterspace >= ftw.options.minLetterSpace || newfontsize != oldfontsize || cell.hasClass('ftw_final')) {
+			//adjust letter spacing to fill the width
+			cell.css('letter-spacing', Math.max(letterspace, ftw.options.minLetterSpace) + 'em');
 
-            if (ftw.mode == "fonts" && letterspace < 0) {
-                if (ftw.options.preferredFit=="tight") {
-                    success = true;
-                } else {
-                    onemore = true;
-                }
-            } else {
-                //if it expanded we have to stop
-                success = true;
-            }
-        }
-        
-        if (onemore) {
-            cell.addClass('ftw_onemore');
-        } else if (ontrial || success) {
-            cell.addClass('ftw_done');
-        }
-    };
-    
-    
-    //ftw.fonts is sorted widest first; once we get to a font that fits, we remove that element from the list
-    $.each(ftw.options.fonts, function(i, font) { 
-        //first go through and update all the css without reading anything
-        ftw.stillToDo.each(function() { 
-            var el = $(this);
-            el.attr('style', el.data('ftw-original-style'));
-            el.data('biggest-font', i==0);
-            font && el.css(font);
-        })
-        // and then start measuring
-        .each(updateSingleWidth);
-        
-        ftw.stillToDo = ftw.stillToDo.not('.ftw_done');
-        
-        //console.log(font, ftw.stillToDo.length + " left.");
-        
-        if (!ftw.stillToDo.length) {
-            return false;
-        }
-    });
-    
-    if (ftw.mode == "fonts") {
-        ftw.stillToDo.addClass('ftw_final').each(updateSingleWidth);
-    }
-    
-    ftw.ready = true;
-    
-    var endtime = Date.now();
-    console.log("Widths updated in " + ((endtime-starttime)/1000) + "s");
+			if (ftw.mode == "fonts" && letterspace < 0) {
+				if (ftw.options.preferredFit=="tight") {
+					success = true;
+				} else {
+					onemore = true;
+				}
+			} else {
+				//if it expanded we have to stop
+				success = true;
+			}
+		}
+		
+		if (onemore) {
+			cell.addClass('ftw_onemore');
+		} else if (ontrial || success) {
+			cell.addClass('ftw_done');
+		}
+	};
+	
+	
+	//ftw.fonts is sorted widest first; once we get to a font that fits, we remove that element from the list
+	$.each(ftw.options.fonts, function(i, font) { 
+		//first go through and update all the css without reading anything
+		ftw.stillToDo.each(function() { 
+			var el = $(this);
+			el.attr('style', el.data('ftw-original-style'));
+			el.data('biggest-font', i==0);
+			font && el.css(font);
+		})
+		// and then start measuring
+		.each(updateSingleWidth);
+		
+		ftw.stillToDo = ftw.stillToDo.not('.ftw_done');
+		
+		//console.log(font, ftw.stillToDo.length + " left.");
+		
+		if (!ftw.stillToDo.length) {
+			return false;
+		}
+	});
+	
+	if (ftw.mode == "fonts") {
+		ftw.stillToDo.addClass('ftw_final').each(updateSingleWidth);
+	}
+	
+	ftw.ready = true;
+	
+	var endtime = Date.now();
+	console.log("Widths updated in " + ((endtime-starttime)/1000) + "s");
 };
 
 FontToWidth.prototype.eotData = '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';
