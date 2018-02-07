@@ -168,7 +168,7 @@ FontToWidth.prototype.measureFonts = function() {
 
 		ftw.options.fonts = newfonts;
 
-		//ftw.measure_div.parentNode.remove(ftw.measure_div);
+		ftw.measure_div.parentNode.removeChild(ftw.measure_div);
 		
 		ftw.startTheBallRolling();
 		
