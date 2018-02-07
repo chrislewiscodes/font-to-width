@@ -24,39 +24,6 @@
 ;(function() {
 'use strict';
 
-function doOnReady(func, thisArg) {
-	if (thisArg) {
-		func = func.bind(thisArg);
-	}
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', func);
-	} else {
-		func();
-	}
-}
-
-function hyphenToCamel (hyphen) {
-	switch (typeof hyphen) {
-	case "object":
-		Object.keys(hyphen).forEach(function(key) {
-			var val = hyphen[key];
-			var newKey = hyphenToCamel(key);
-			if (key != newKey) {
-				hyphen[newKey] = val;
-				delete hyphen[key];
-			}
-		});
-		return hyphen;
-	
-	case "string":
-		return hyphen.replace(/-([a-z])/g, function(x, letter) { return letter.toUpperCase() });
-	
-	default:
-		return hyphen;
-	}
-}
-
-
 /**
  * @param  options
  * @param [options.fonts]						A list of font-family names or sets of CSS style parameters.
@@ -67,7 +34,7 @@ function hyphenToCamel (hyphen) {
  * @param [options.preferredFit="tight"]		Whether to prefer "tight" or "loose" letterspacing
  * @param [options.preferredSize="large"]	Whether to prefer "large" or "small" font-size
  */
- 
+
 var FontToWidth = function(options) {
 
 	// in case we were not called with "new"
@@ -144,12 +111,6 @@ FontToWidth.prototype.measureFonts = function() {
 		return;
 	}
 
-	//add Adobe Blank @font-face
-	var style = document.createElement('style');
-	style.id = "ftw-adobe-blank";
-	style.textContent = '@font-face { font-family: AdobeBlank; src: url("data:application/font-woff;base64,' + ftw.woffData + '") format("woff"); }';
-	document.head.appendChild(style);
-
 	//create a hidden element to measure the relative widths of all the fonts
 	var div = ftw.measure_div = document.createElement('div');
 	div.style.position = 'absolute';
@@ -178,82 +139,57 @@ FontToWidth.prototype.measureFonts = function() {
 	
 	document.body.appendChild(div);
 
-	//then go through and set default measurement font
-	spans.forEach(function(span) {
-		span.setAttribute('data-font-family', span.style.fontFamily || getComputedStyle(span).fontFamily);
-		span.style.fontFamily = 'AdobeBlank';
-	});
+	var fontsloaded = function() {
 
-	//keep re-measuring the widths until they've all changed
-	// Most browsers will load zero-width Adobe Blank
-	// But otherwise they will load fallback, so hopefully your font isn't the same width as Times New Roman
-	var tries = 60; 
-	var origwidths = new Array(ftw.fontwidths.length);
-	var measurefunc = function() {
+		ftw.ready = true;
 
-		if (--tries < 0) {
-			var blank = document.getElementById('ftw-adobe-blank');
-			console.log("Giving up!");
-			clearInterval(ftw.measuretimeout);
-			blank.parentNode.removeChild(blank);
-			return;
-		}
-
-		var allLoaded = true;
 		spans.forEach(function(span, i) {
 			ftw.fontwidths[i] = span.getBoundingClientRect().width;
-			if (ftw.fontwidths[i] == origwidths[i]) {
-				allLoaded = false;
-			}
 		});
 
-		console.log("Measured", Date.now()/1000);
+		//sort the font list widest first
+		var font2width = new Array(ftw.options.fonts.length);
+		ftw.fontwidths.forEach(function(mywidth, i) {
+			font2width[i] = {index: i, width: mywidth};
+		});
+
+		font2width.sort(function(b,a) { 
+			if (a.width < b.width)
+				return -1;
+			if (a.width > b.width)
+				return 1;
+			return 0;
+		});
+
+		var newfonts = new Array(font2width.length);
+		font2width.forEach(function(font, i) {
+			newfonts[i] = ftw.options.fonts[font.index];
+		});
+
+		ftw.options.fonts = newfonts;
+
+		//ftw.measure_div.parentNode.remove(ftw.measure_div);
 		
-		if (allLoaded) {
-			ftw.ready = true;
-			clearInterval(ftw.measuretimeout);
-
-			//sort the font list widest first
-			var font2width = new Array(ftw.options.fonts.length);
-			ftw.fontwidths.forEach(function(mywidth, i) {
-				font2width[i] = {index: i, width: mywidth};
-			});
-
-			font2width.sort(function(b,a) { 
-				if (a.width < b.width)
-					return -1;
-				if (a.width > b.width)
-					return 1;
-				return 0;
-			});
-
-			var newfonts = new Array(font2width.length);
-			font2width.forEach(function(font, i) {
-				newfonts[i] = ftw.options.fonts[font.index];
-			});
-
-			ftw.options.fonts = newfonts;
-
-			//ftw.measure_div.parentNode.remove(ftw.measure_div);
-			
-			var blank = document.getElementById('ftw-adobe-blank');
-			blank.parentNode.removeChild(blank);
-
-			ftw.startTheBallRolling();
-		}
+		ftw.startTheBallRolling();
 		
 	};
-	
-	//measure the initial width and then restore the font-family
-	setTimeout(function() {
-		spans.forEach(function(span, i) {
-			origwidths[i] = span.getBoundingClientRect().width;
-			span.style.fontFamily = span.getAttribute('data-font-family') + ', AdobeBlank';
-		});
-		//setTimeout(measurefunc, 50); //again allow a bit of time for the new fonts to take
-		ftw.measuretimeout = setInterval(measurefunc, 500);
-	}, 10); //it takes a few milliseconds for fonts to be applied after they're loaded
 
+	// use CSS font loading API if it's available
+	// otherwise load up font face observer
+	if (document.fonts && 'ready' in document.fonts) {
+		document.fonts.ready.then(fontsloaded);
+	} else {
+		var ffos = [];
+		ftw.options.fonts.forEach(function(font) {
+			console.log(font);
+			ffos.push((new FontFaceObserver(font.fontFamily.replace(/"/g, ''), {
+				style: font.fontStyle,
+				weight: font.fontWeight,
+				stretch: font.fontStretch
+			})).load());
+		});
+		Promise.all(ffos).then(fontsloaded);
+	}
 };
 
 FontToWidth.prototype.startTheBallRolling = function() {
@@ -430,11 +366,147 @@ FontToWidth.prototype.updateWidths = function() {
 	ftw.ready = true;
 	
 	var endtime = Date.now();
-	console.log("Widths updated in " + ((endtime-starttime)/1000) + "s");
+	//console.log("Widths updated in " + ((endtime-starttime)/1000) + "s");
 };
-
-FontToWidth.prototype.woffData='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';
 
 window.FontToWidth = FontToWidth;
 
+
+//handy polyfills and utility functions
+
+// forEach on nodes, from MDN
+if (window.NodeList && !NodeList.prototype.forEach) {
+	NodeList.prototype.forEach = function (callback, thisArg) {
+		thisArg = thisArg || window;
+		for (var i = 0; i < this.length; i++) {
+			callback.call(thisArg, this[i], i, this);
+		}
+	};
+}
+
+// jQuery-style addClass/removeClass are not canon, but more flexible than ClassList
+if (!HTMLElement.prototype.hasClass) {
+	HTMLElement.prototype.hasClass = function(str) {
+		var el = this;
+		var words = str.split(/\s+/);
+		var found = true;
+		words.forEach(function(word) {
+			found = found && el.className.match(new RegExp("(^|\\s)" + word + "($|\\s)"));
+		});
+		return !!found;
+	}
+}
+
+var spacere = /\s{2,}/g;
+if (!HTMLElement.prototype.addClass) {
+	HTMLElement.prototype.addClass = function(cls) {
+		this.className += ' ' + cls;
+		this.className = this.className.trim().replace(spacere, ' ');
+		return this;
+	}
+}
+
+if (!HTMLElement.prototype.removeClass) {
+	HTMLElement.prototype.removeClass = function(cls) {
+		var i, words = cls.split(/\s+/);
+		if (words.length > 1) {
+			for (var i=0; i < words.length; i++) {
+				this.removeClass(words[i]);
+			}
+		} else {
+			var classre = new RegExp('(^|\\s)' + cls + '($|\\s)', 'g');
+			while (classre.test(this.className)) {
+				this.className = this.className.replace(classre, ' ').trim().replace(spacere, '');
+			}
+		}
+		return this;
+	}
+}
+
+// closest, from MDN
+if (!Element.prototype.matches) {
+	Element.prototype.matches = Element.prototype.msMatchesSelector || 
+								Element.prototype.webkitMatchesSelector;
+}
+
+if (!Element.prototype.closest) {
+	Element.prototype.closest = function(s) {
+		var el = this;
+		if (!document.documentElement.contains(el)) return null;
+		do {
+			if (el.matches(s)) return el;
+			el = el.parentElement || el.parentNode;
+		} while (el !== null && el.nodeType === 1); 
+		return null;
+	};	
+}
+
+// not in the spec, but seems weird to be able to do it on elements but not text nodes
+if (!Node.prototype.closest) {
+	Node.prototype.closest = function(s) {
+		return this.parentNode && this.parentNode.closest(s);
+	}
+}
+
+// my own invention
+if (!RegExp.escape) {
+	RegExp.escape= function(s) {
+		return s.replace(/[\-\/\\\^\$\*\+\?\.\(\)\|\[\]\{\}]/g, '\\$&');
+	};
+}
+
+
+
+function doOnReady(func, thisArg) {
+	if (thisArg) {
+		func = func.bind(thisArg);
+	}
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', func);
+	} else {
+		func();
+	}
+}
+
+function hyphenToCamel (hyphen) {
+	switch (typeof hyphen) {
+	case "object":
+		Object.keys(hyphen).forEach(function(key) {
+			var val = hyphen[key];
+			var newKey = hyphenToCamel(key);
+			if (key != newKey) {
+				hyphen[newKey] = val;
+				delete hyphen[key];
+			}
+		});
+		return hyphen;
+	
+	case "string":
+		return hyphen.replace(/-([a-z])/g, function(x, letter) { return letter.toUpperCase() });
+	
+	default:
+		return hyphen;
+	}
+}
+
+
+
 })();
+
+
+//FontFaceObserver
+/* Font Face Observer v2.0.13 - © Bram Stein. License: BSD-3-Clause */
+if (!document.fonts || !document.fonts.ready) {
+(function(){'use strict';var f,g=[];function l(a){g.push(a);1==g.length&&f()}function m(){for(;g.length;)g[0](),g.shift()}f=function(){setTimeout(m)};function n(a){this.a=p;this.b=void 0;this.f=[];var b=this;try{a(function(a){q(b,a)},function(a){r(b,a)})}catch(c){r(b,c)}}var p=2;function t(a){return new n(function(b,c){c(a)})}function u(a){return new n(function(b){b(a)})}function q(a,b){if(a.a==p){if(b==a)throw new TypeError;var c=!1;try{var d=b&&b.then;if(null!=b&&"object"==typeof b&&"function"==typeof d){d.call(b,function(b){c||q(a,b);c=!0},function(b){c||r(a,b);c=!0});return}}catch(e){c||r(a,e);return}a.a=0;a.b=b;v(a)}}
+function r(a,b){if(a.a==p){if(b==a)throw new TypeError;a.a=1;a.b=b;v(a)}}function v(a){l(function(){if(a.a!=p)for(;a.f.length;){var b=a.f.shift(),c=b[0],d=b[1],e=b[2],b=b[3];try{0==a.a?"function"==typeof c?e(c.call(void 0,a.b)):e(a.b):1==a.a&&("function"==typeof d?e(d.call(void 0,a.b)):b(a.b))}catch(h){b(h)}}})}n.prototype.g=function(a){return this.c(void 0,a)};n.prototype.c=function(a,b){var c=this;return new n(function(d,e){c.f.push([a,b,d,e]);v(c)})};
+function w(a){return new n(function(b,c){function d(c){return function(d){h[c]=d;e+=1;e==a.length&&b(h)}}var e=0,h=[];0==a.length&&b(h);for(var k=0;k<a.length;k+=1)u(a[k]).c(d(k),c)})}function x(a){return new n(function(b,c){for(var d=0;d<a.length;d+=1)u(a[d]).c(b,c)})};window.Promise||(window.Promise=n,window.Promise.resolve=u,window.Promise.reject=t,window.Promise.race=x,window.Promise.all=w,window.Promise.prototype.then=n.prototype.c,window.Promise.prototype["catch"]=n.prototype.g);}());
+
+(function(){function l(a,b){document.addEventListener?a.addEventListener("scroll",b,!1):a.attachEvent("scroll",b)}function m(a){document.body?a():document.addEventListener?document.addEventListener("DOMContentLoaded",function c(){document.removeEventListener("DOMContentLoaded",c);a()}):document.attachEvent("onreadystatechange",function k(){if("interactive"==document.readyState||"complete"==document.readyState)document.detachEvent("onreadystatechange",k),a()})};function r(a){this.a=document.createElement("div");this.a.setAttribute("aria-hidden","true");this.a.appendChild(document.createTextNode(a));this.b=document.createElement("span");this.c=document.createElement("span");this.h=document.createElement("span");this.f=document.createElement("span");this.g=-1;this.b.style.cssText="max-width:none;display:inline-block;position:absolute;height:100%;width:100%;overflow:scroll;font-size:16px;";this.c.style.cssText="max-width:none;display:inline-block;position:absolute;height:100%;width:100%;overflow:scroll;font-size:16px;";
+this.f.style.cssText="max-width:none;display:inline-block;position:absolute;height:100%;width:100%;overflow:scroll;font-size:16px;";this.h.style.cssText="display:inline-block;width:200%;height:200%;font-size:16px;max-width:none;";this.b.appendChild(this.h);this.c.appendChild(this.f);this.a.appendChild(this.b);this.a.appendChild(this.c)}
+function t(a,b){a.a.style.cssText="max-width:none;min-width:20px;min-height:20px;display:inline-block;overflow:hidden;position:absolute;width:auto;margin:0;padding:0;top:-999px;white-space:nowrap;font-synthesis:none;font:"+b+";"}function y(a){var b=a.a.offsetWidth,c=b+100;a.f.style.width=c+"px";a.c.scrollLeft=c;a.b.scrollLeft=a.b.scrollWidth+100;return a.g!==b?(a.g=b,!0):!1}function z(a,b){function c(){var a=k;y(a)&&a.a.parentNode&&b(a.g)}var k=a;l(a.b,c);l(a.c,c);y(a)};function A(a,b){var c=b||{};this.family=a;this.style=c.style||"normal";this.weight=c.weight||"normal";this.stretch=c.stretch||"normal"}var B=null,C=null,E=null,F=null;function G(){if(null===C)if(J()&&/Apple/.test(window.navigator.vendor)){var a=/AppleWebKit\/([0-9]+)(?:\.([0-9]+))(?:\.([0-9]+))/.exec(window.navigator.userAgent);C=!!a&&603>parseInt(a[1],10)}else C=!1;return C}function J(){null===F&&(F=!!document.fonts);return F}
+function K(){if(null===E){var a=document.createElement("div");try{a.style.font="condensed 100px sans-serif"}catch(b){}E=""!==a.style.font}return E}function L(a,b){return[a.style,a.weight,K()?a.stretch:"","100px",b].join(" ")}
+A.prototype.load=function(a,b){var c=this,k=a||"BESbswy",q=0,D=b||3E3,H=(new Date).getTime();return new Promise(function(a,b){if(J()&&!G()){var M=new Promise(function(a,b){function e(){(new Date).getTime()-H>=D?b():document.fonts.load(L(c,'"'+c.family+'"'),k).then(function(c){1<=c.length?a():setTimeout(e,25)},function(){b()})}e()}),N=new Promise(function(a,c){q=setTimeout(c,D)});Promise.race([N,M]).then(function(){clearTimeout(q);a(c)},function(){b(c)})}else m(function(){function u(){var b;if(b=-1!=
+f&&-1!=g||-1!=f&&-1!=h||-1!=g&&-1!=h)(b=f!=g&&f!=h&&g!=h)||(null===B&&(b=/AppleWebKit\/([0-9]+)(?:\.([0-9]+))/.exec(window.navigator.userAgent),B=!!b&&(536>parseInt(b[1],10)||536===parseInt(b[1],10)&&11>=parseInt(b[2],10))),b=B&&(f==v&&g==v&&h==v||f==w&&g==w&&h==w||f==x&&g==x&&h==x)),b=!b;b&&(d.parentNode&&d.parentNode.removeChild(d),clearTimeout(q),a(c))}function I(){if((new Date).getTime()-H>=D)d.parentNode&&d.parentNode.removeChild(d),b(c);else{var a=document.hidden;if(!0===a||void 0===a)f=e.a.offsetWidth,
+g=n.a.offsetWidth,h=p.a.offsetWidth,u();q=setTimeout(I,50)}}var e=new r(k),n=new r(k),p=new r(k),f=-1,g=-1,h=-1,v=-1,w=-1,x=-1,d=document.createElement("div");d.dir="ltr";t(e,L(c,"sans-serif"));t(n,L(c,"serif"));t(p,L(c,"monospace"));d.appendChild(e.a);d.appendChild(n.a);d.appendChild(p.a);document.body.appendChild(d);v=e.a.offsetWidth;w=n.a.offsetWidth;x=p.a.offsetWidth;I();z(e,function(a){f=a;u()});t(e,L(c,'"'+c.family+'",sans-serif'));z(n,function(a){g=a;u()});t(n,L(c,'"'+c.family+'",serif'));
+z(p,function(a){h=a;u()});t(p,L(c,'"'+c.family+'",monospace'))})})};"object"===typeof module?module.exports=A:(window.FontFaceObserver=A,window.FontFaceObserver.prototype.load=A.prototype.load);}());
+}
