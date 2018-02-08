@@ -15,7 +15,7 @@
  * Freely made available under the MIT license: http://opensource.org/licenses/MIT
  * 
  * CHANGELOG:
- * 2018-02-05 Remove jQuery dependency; add support for variable fonts
+ * 2018-02-05 Remove jQuery dependency; better font load detection; add support for variable fonts
  * 2015-02-28 Allow arbitrary CSS styles for each font
  * 2014-03-31 Initial release: minLetterSpace option; errs on the side of narrow spacing
  *
@@ -27,6 +27,7 @@
 /**
  * @param  options
  * @param [options.fonts]						A list of font-family names or sets of CSS style parameters.
+ * @param [options.variableFont]				A font object as in `options.fonts`, plus optional `axis`, `min`, `max` properties
  * @param [options.elements=".ftw"]			A CSS selector or jQuery object specifying which elements should apply FTW
  * @param [options.minLetterSpace=-0.04]	A very small, probably negative number indicating degree of allowed tightening
  * @param [options.minFontSize=1.0]			Allow scaling of font-size. Ratio to original font size.
@@ -47,23 +48,50 @@ var FontToWidth = function(options) {
 	//OPTIONS 
 	
 	//fill out fonts CSS with default settings
-	ftw.mode = "fonts";
-	if (!options.fonts) {
+	function normalizedFontObject(font) {
+		var result = {};
+		if (typeof font == "string") {
+			font = {fontFamily: font};
+		}
+		result.fontFamily = font.fontFamily || font['font-family'];
+		if (!result.fontFamily) {
+			throw "Invalid font object";
+		}
+		if (result.fontFamily.indexOf(' ') >= 0 && !result.fontFamily.match(/^['"]/)) {
+			result.fontFamily = '"' + result.fontFamily + '"';
+		}
+		result.fontWeight = font['font-weight'] || font.fontWeight || 'normal';
+		result.fontStyle = font['font-style'] || font.fontStyle || 'normal';
+		result.fontStretch = font['font-stretch'] || font.fontStretch || 'normal';
+
+		return result;
+	}
+
+	var browserSupportsVarFonts = typeof document.createElement('span').style.fontVariationSettings === 'string';
+	
+	if (options.variableFont) {
+		if (browserSupportsVarFonts) {
+			ftw.mode = 'variable';
+			options.fonts = [normalizedFontObject(options.variableFont)];
+			options.axis = options.variableFont.axis || 'wdth';
+			options.axisMin = isNaN(parseFloat(options.variableFont.min)) ? 1 : options.variableFont.min;
+			options.axisMax = isNaN(parseFloat(options.variableFont.max)) ? 1000 : options.variableFont.max;
+		} else {
+			console.log("FontToWidth warning: variable mode specified, but this browser does not suport variable fonts");
+			if (!options.fonts) {
+				options.fonts = [options.variableFont];
+			}
+		}
+	}
+	
+	if (options.fonts) {
+		ftw.mode = ftw.mode || 'fonts';
+		options.fonts.forEach(function(font, i) {
+			options.fonts[i] = normalizedFontObject(font);
+		});
+	} else {
 		ftw.mode = "scale";
 		options.fonts = [ false ];
-	} else {
-		options.fonts.forEach(function(font, i) {
-			if (typeof font == "string") {
-				options.fonts[i] = font = { fontFamily: font };
-			}
-			hyphenToCamel(font);
-			if (font.fontFamily.indexOf(' ') >= 0 && !font.fontFamily.match(/^['"]/)) {
-				font.fontFamily = '"' + font.fontFamily + '"';
-			}
-			font.fontWeight = font.fontWeight || 'normal';
-			font.fontStyle = font.fontStyle || 'normal';
-			if (font.fontSize) delete font.fontSize;
-		});
 	}
 
 	options.elements = options.elements || '.ftw, .font-to-width, .fonttowidth';
@@ -90,6 +118,8 @@ var FontToWidth = function(options) {
 	ftw.allTheElements.forEach(function(el) {
 		el.style.whiteSpace = 'nowrap';
 		el.setAttribute('data-ftw-original-style', el.getAttribute('style'));
+		
+		//wrap element contents in a single span
 		var span = document.createElement('span');
 		span.style.display = 'inline !important';
 		el.childNodes.forEach(function(node) {
@@ -143,30 +173,32 @@ FontToWidth.prototype.measureFonts = function() {
 
 		ftw.ready = true;
 
-		spans.forEach(function(span, i) {
-			ftw.fontwidths[i] = span.getBoundingClientRect().width;
-		});
-
-		//sort the font list widest first
-		var font2width = new Array(ftw.options.fonts.length);
-		ftw.fontwidths.forEach(function(mywidth, i) {
-			font2width[i] = {index: i, width: mywidth};
-		});
-
-		font2width.sort(function(b,a) { 
-			if (a.width < b.width)
-				return -1;
-			if (a.width > b.width)
-				return 1;
-			return 0;
-		});
-
-		var newfonts = new Array(font2width.length);
-		font2width.forEach(function(font, i) {
-			newfonts[i] = ftw.options.fonts[font.index];
-		});
-
-		ftw.options.fonts = newfonts;
+		if (ftw.options.fonts.length > 1) {
+			spans.forEach(function(span, i) {
+				ftw.fontwidths[i] = span.getBoundingClientRect().width;
+			});
+	
+			//sort the font list widest first
+			var font2width = new Array(ftw.options.fonts.length);
+			ftw.fontwidths.forEach(function(mywidth, i) {
+				font2width[i] = {index: i, width: mywidth};
+			});
+	
+			font2width.sort(function(b,a) { 
+				if (a.width < b.width)
+					return -1;
+				if (a.width > b.width)
+					return 1;
+				return 0;
+			});
+	
+			var newfonts = new Array(font2width.length);
+			font2width.forEach(function(font, i) {
+				newfonts[i] = ftw.options.fonts[font.index];
+			});
+	
+			ftw.options.fonts = newfonts;
+		}
 
 		ftw.measure_div.parentNode.removeChild(ftw.measure_div);
 		
@@ -247,16 +279,135 @@ FontToWidth.prototype.updateWidths = function() {
 	
 	ftw.ready = false;
 
-	ftw.stillToDo = ftw.allTheElements;
-	ftw.stillToDo.forEach(function(el) { el.removeClass('ftw_done ftw_final ftw_onemore'); });
-
 	//doing this in waves is much faster, since we update all the fonts at once, then do only one repaint per font
 	// as opposed to one repaint for every element
 
-	var updateSingleWidth = function(cell) {
-		var span = cell.querySelector('span');
+	ftw.stillToDo = ftw.allTheElements;
+	ftw.stillToDo.forEach(function(el) { el.removeClass('ftw_done ftw_final ftw_onemore'); });
 
-		var ontrial = cell.hasClass('ftw_onemore');
+	var fvsRE = window.re = new RegExp('(,/s*)?[\'"]' + ftw.options.axis + '[\'"] [\\-\\d\\.]+', 'g');
+	function updateFVS(el, val) {
+		el.style.fontVariationSettings = el.style.fontVariationSettings.replace(fvsRE, '"' + ftw.options.axis + '" ' + val);
+		el.setAttribute('data-axis-val', val);
+	}
+
+	if (ftw.mode === 'variable') {
+		//pre-set variable axis to middle value
+		var info = new Array(ftw.allTheElements.length);
+		ftw.allTheElements.forEach(function(el, i) { 
+			el.style.cssText = el.getAttribute('data-ftw-original-style');
+			var currentStyle = getComputedStyle(el).fontVariationSettings;
+			var axisString = '"' + ftw.options.axis + '" 1';
+			if (currentStyle.length && currentStyle !== 'normal') {
+				el.style.fontVariationSettings += ', ' + axisString;
+			} else {
+				el.style.fontVariationSettings = axisString;
+			}
+			info[i] = {
+				'val': (ftw.options.axisMin + ftw.options.axisMax)/2,
+				'min': ftw.options.axisMin,
+				'max': ftw.options.axisMax,
+				'mille': (ftw.options.axisMax-ftw.options.axisMin)/1000,
+				'done': false
+			};
+		});
+		
+		//now we go through waves of setting values and then measuring widths
+		var tries = 20, anyLeft = ftw.allTheElements.length;
+		while (anyLeft && tries--) {
+			//update
+			ftw.allTheElements.forEach(function(cell, i) {
+				if (info[i].done) return;
+				updateFVS(cell, info[i].val);
+			});
+			
+			//measure
+			ftw.allTheElements.forEach(function(cell, i) {
+				if (info[i].done) return;
+				var span = cell.firstElementChild;
+		
+				var fullwidth = cell.getBoundingClientRect().width;
+				var textwidth = span.getBoundingClientRect().width;
+		
+				if (info[i].val < info[i].min + info[i].mille) {
+					info[i].val = info[i].min;
+					info[i].done = true;
+					adjustFontSizeAndLetterSpacing(cell);
+					--anyLeft;
+				} else if (info[i].val > info[i].max - info[i].mille) {
+					info[i].val = info[i].max;
+					info[i].done = true;
+					adjustFontSizeAndLetterSpacing(cell);
+					--anyLeft;
+				} else if (Math.abs(fullwidth-textwidth) <= 1) {
+					info[i].done = true;
+					--anyLeft;
+					return;
+				} else if (!isNaN(info[i].previous) && Math.abs(info[i].val - info[i].previous) < info[i].mille) {
+					info[i].done = true;
+					--anyLeft;
+					return;
+				}
+
+				if (fullwidth > textwidth) {
+					info[i].min = info[i].val;
+				} else {
+					info[i].max = info[i].val;
+				}
+				
+				info[i].previous = info[i].val;
+				info[i].val = (info[i].min + info[i].max)/2;
+			});
+		}
+	} else {
+		//ftw.fonts is sorted widest first; once we get to a font that fits, we remove that element from the list
+		try {
+		ftw.options.fonts.forEach(function(font, i) { 
+			//first go through and update all the css without reading anything
+			ftw.stillToDo.forEach(function(el) { 
+				el.style.cssText = el.getAttribute('data-ftw-original-style');
+				el.setAttribute('data-biggest-font', i==0 ? 'true' : '');
+				if (font) {
+					Object.keys(font).forEach(function(k) {
+						el.style[k] = font[k];
+					});
+				}
+			});
+	
+			// and then start measuring
+			ftw.stillToDo.forEach(updateSingleWidth);
+			
+			var stillstill = [];
+			ftw.stillToDo.forEach(function(el) { 
+				if (!el.hasClass('ftw_done')) {
+					stillstill.push(el);
+				}
+			});
+			
+			ftw.stillToDo = stillstill;
+
+			//console.log(font, ftw.stillToDo.length + " left.");
+			
+			if (!ftw.stillToDo.length) {
+				throw "all done";
+			}
+		});
+		} catch (e) {
+			if (e === 'all done') {
+			} else {
+				throw e;
+			}
+		}
+		
+		if (ftw.mode == "fonts") {
+			ftw.stillToDo.forEach(function(el) { el.addClass('ftw_final'); });
+			ftw.stillToDo.forEach(updateSingleWidth);
+		}
+	}
+
+	function adjustFontSizeAndLetterSpacing(cell, lasttime) {
+		var span = cell.firstElementChild;
+
 		var success = false;
 
 		var fullwidth = cell.getBoundingClientRect().width;
@@ -269,9 +420,91 @@ FontToWidth.prototype.updateWidths = function() {
 
 		//first try nudging the font size
 		var newfontsize=fontsize, oldfontsize=fontsize, ratioToFit = fullwidth/textwidth;
-
+		
 		//for the widest font, we can max out the size
-		if (cell.getAttribute('data-biggest-font') && ratioToFit > ftw.options.maxFontSize) {
+		if (ratioToFit > ftw.options.maxFontSize) {
+			ratioToFit = ftw.options.maxFontSize;
+		} else if (ratioToFit < ftw.options.minFontSize) {
+			ratioToFit = ftw.options.minFontSize;
+		}
+		
+		if (ratioToFit != 1 && ratioToFit >= ftw.options.minFontSize && ratioToFit <= ftw.options.maxFontSize) {
+			//adjust the font size and then nudge letterspacing on top of that
+			newfontsize = Math.round(fontsize * ratioToFit);
+			cell.style.fontSize = newfontsize + 'px';
+			textwidth *= newfontsize/fontsize;
+			fontsize = newfontsize;
+
+			if (ftw.mode == "fonts" && ratioToFit < ftw.options.avgFontSize) {
+				if (ftw.options.preferredSize=="small") {
+					success = true;
+				} else {
+					onemore = true;
+				}
+			} else {
+				//if it grew we have to stop
+				success = true;
+			}
+		}
+	
+		var letterspace = (fullwidth-textwidth)/lettercount/fontsize;
+
+		if (letterspace >= ftw.options.minLetterSpace || newfontsize != oldfontsize || lasttime===true) {
+			//adjust letter spacing to fill the width
+			cell.style.letterSpacing = Math.max(letterspace, ftw.options.minLetterSpace) + 'em';
+
+			if (ftw.mode == "fonts" && letterspace < 0) {
+				if (ftw.options.preferredFit=="tight") {
+					success = true;
+				} else {
+					onemore = true;
+				}
+			} else {
+				//if it expanded we have to stop
+				success = true;
+			}
+		}
+		
+		if (onemore && lasttime !== true) {
+			adjustFontSizeAndLetterSpacing(cell, true);
+		}
+	}
+
+	function updateSingleWidth(cell) {
+		var span = cell.firstElementChild;
+
+		var ontrial = cell.hasClass('ftw_onemore');
+		var success = false;
+
+		var fullwidth = cell.getBoundingClientRect().width;
+		var textwidth = span.getBoundingClientRect().width;
+		var lettercount = span.innerText.length-1; //this will probably get confused with fancy unicode text
+		var fontsize = parseFloat(getComputedStyle(cell).fontSize);
+
+		//if this is a borderline fit
+		var onemore = false;
+
+		//for var
+		if (ftw.mode === 'variable') {
+			var axisVal = parseFloat(cell.getAttribute('data-axis-val'));
+			var axisMin = parseFloat(cell.getAttribute('data-axis-min') || ftp.options.axisMin);
+			var axisMax = parseFloat(cell.getAttribute('data-axis-max') || ftp.options.axisMax);
+
+			if (ratioToFit > 1) {
+				cell.setAttribute('data-axis-min', axisMin = axisVal);
+			} else if (ratioToFit < 1) {
+				cell.setAttribute('data-axis-max', axisMax = axisVal);
+			}
+			
+			cell.setAttribute('data-axis-val', axisVal = (axisMin + axisMax) / 2);
+			updateFVS(cell, axisVal);
+		}
+
+		//first try nudging the font size
+		var newfontsize=fontsize, oldfontsize=fontsize, ratioToFit = fullwidth/textwidth;
+		
+		//for the widest font, we can max out the size
+		if ((cell.getAttribute('data-biggest-font') || axisVal == axisMax) && ratioToFit > ftw.options.maxFontSize) {
 			ratioToFit = ftw.options.maxFontSize;
 		}
 		
@@ -317,50 +550,6 @@ FontToWidth.prototype.updateWidths = function() {
 		} else if (ontrial || success) {
 			cell.addClass('ftw_done');
 		}
-	};
-	
-	//ftw.fonts is sorted widest first; once we get to a font that fits, we remove that element from the list
-	try {
-	ftw.options.fonts.forEach(function(font, i) { 
-		//first go through and update all the css without reading anything
-		ftw.stillToDo.forEach(function(el) { 
-			el.style.cssText = el.getAttribute('data-ftw-original-style');
-			el.setAttribute('data-biggest-font', i==0 ? 'true' : '');
-			if (font) {
-				Object.keys(font).forEach(function(k) {
-					el.style[k] = font[k];
-				});
-			}
-		});
-
-		// and then start measuring
-		ftw.stillToDo.forEach(updateSingleWidth);
-		
-		var stillstill = [];
-		ftw.stillToDo.forEach(function(el) { 
-			if (!el.hasClass('ftw_done')) {
-				stillstill.push(el);
-			}
-		});
-		
-		ftw.stillToDo = stillstill;
-		
-		//console.log(font, ftw.stillToDo.length + " left.");
-		
-		if (!ftw.stillToDo.length) {
-			throw "all done";
-		}
-	});
-	} catch (e) {
-		if (e === 'all done') {
-		} else {
-			throw e;
-		}
-	}
-	
-	if (ftw.mode == "fonts") {
-		ftw.stillToDo.forEach(function(el) { el.addClass('ftw_final'); });
-		ftw.stillToDo.forEach(updateSingleWidth);
 	}
 	
 	ftw.ready = true;
