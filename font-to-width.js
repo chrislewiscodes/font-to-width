@@ -213,7 +213,6 @@ FontToWidth.prototype.measureFonts = function() {
 	} else {
 		var ffos = [];
 		ftw.options.fonts.forEach(function(font) {
-			console.log(font);
 			ffos.push((new FontFaceObserver(font.fontFamily.replace(/"/g, ''), {
 				style: font.fontStyle,
 				weight: font.fontWeight,
@@ -273,6 +272,11 @@ FontToWidth.prototype.updateWidths = function() {
 	
 	if (!ftw.ready) return;
 	
+	function getContentWidth(cell) {
+		var styles = getComputedStyle(cell);
+		return cell.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight);
+	}
+	
 	ftw.options.avgFontSize = (ftw.options.maxFontSize + ftw.options.minFontSize)/2;
 	
 	var starttime = Date.now();
@@ -326,7 +330,7 @@ FontToWidth.prototype.updateWidths = function() {
 				if (info[i].done) return;
 				var span = cell.firstElementChild;
 		
-				var fullwidth = cell.getBoundingClientRect().width;
+				var fullwidth = getContentWidth(cell);
 				var textwidth = span.getBoundingClientRect().width;
 		
 				if (info[i].val < info[i].min + info[i].mille) {
@@ -410,7 +414,7 @@ FontToWidth.prototype.updateWidths = function() {
 
 		var success = false;
 
-		var fullwidth = cell.getBoundingClientRect().width;
+		var fullwidth = getContentWidth(cell);
 		var textwidth = span.getBoundingClientRect().width;
 		var lettercount = span.innerText.length-1; //this will probably get confused with fancy unicode text
 		var fontsize = parseFloat(getComputedStyle(cell).fontSize);
@@ -476,7 +480,7 @@ FontToWidth.prototype.updateWidths = function() {
 		var ontrial = cell.hasClass('ftw_onemore');
 		var success = false;
 
-		var fullwidth = cell.getBoundingClientRect().width;
+		var fullwidth = getContentWidth(cell);
 		var textwidth = span.getBoundingClientRect().width;
 		var lettercount = span.innerText.length-1; //this will probably get confused with fancy unicode text
 		var fontsize = parseFloat(getComputedStyle(cell).fontSize);
