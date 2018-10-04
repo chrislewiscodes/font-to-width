@@ -11,10 +11,11 @@
  * Multiple FontToWidth instances can be created using different font lists and elements.
  * Element can be any block or inline-block element.
  *
- * © 2018 Chris Lewis http://chrissam42.com and Nick Sherman http://nicksherman.com
+ * © 2018 Chris Lewis http://chrislewis.codes and Nick Sherman http://nicksherman.com
  * Freely made available under the MIT license: http://opensource.org/licenses/MIT
  * 
  * CHANGELOG:
+ * 2018-10-04 Add maxLetterSpace option
  * 2018-02-05 Remove jQuery dependency; better font load detection; add support for variable fonts
  * 2015-02-28 Allow arbitrary CSS styles for each font
  * 2014-03-31 Initial release: minLetterSpace option; errs on the side of narrow spacing
@@ -29,6 +30,7 @@
  * @param [options.fonts]						A list of font-family names or sets of CSS style parameters.
  * @param [options.variableFont]				A font object as in `options.fonts`, plus optional `axis`, `min`, `max` properties
  * @param [options.elements=".ftw"]			A CSS selector or jQuery object specifying which elements should apply FTW
+ * @param [options.maxLetterSpace=none]		Maximum allowed space stretching when font size maxes out
  * @param [options.minLetterSpace=-0.04]	A very small, probably negative number indicating degree of allowed tightening
  * @param [options.minFontSize=1.0]			Allow scaling of font-size. Ratio to original font size.
  * @param [options.maxFontSize=1.0]			Allow scaling of font-size. Ratio to original font size.
@@ -455,6 +457,10 @@ FontToWidth.prototype.updateWidths = function() {
 
 		if (letterspace >= ftw.options.minLetterSpace || newfontsize != oldfontsize || lasttime===true) {
 			//adjust letter spacing to fill the width
+			if (typeof ftw.options.maxLetterSpace === 'number') {
+				letterspace = Math.min(letterspace, ftw.options.maxLetterSpace);
+			}
+
 			cell.style.letterSpacing = Math.max(letterspace, ftw.options.minLetterSpace) + 'em';
 
 			if (ftw.mode == "fonts" && letterspace < 0) {
