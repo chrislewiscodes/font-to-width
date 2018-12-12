@@ -22,7 +22,6 @@ Freely made available under the MIT license: http://opensource.org/licenses/MIT
 	</script>
 
 ### Notes
-* jQuery is required and must be present in the page before any FTW instances are created
 * Multiple FontToWidth instances can be created using different font lists and elements.
 * Elements can be anything that is display:block or inline-block
 * If no fonts are specified, behavior reverts to a simple scale-to-width system
@@ -33,18 +32,21 @@ All options are optional.
 
 Name            | Default                               | Description
 ----------------|---------------------------------------|----------------------------------------------------------------------------------
- fonts          |                                       |  A list of font-family names or sets of CSS style parameters. If empty, existing fonts are scaled to fit
- elements       | ".ftw, .font-to-width, .fonttowidth"  |  A CSS selector or jQuery object specifying which elements should apply FTW
- minLetterSpace | -0.04                                 |  A very small, probably negative number indicating degree of allowed tightening
- minFontSize    | 1.0                                   |  Allow scaling of font-size to this ratio of original
- maxFontSize    | 1.0                                   |  Allow scaling of font-size to this ratio of original
- preferredFit   | "tight"                               |  Whether to prefer "tight" or "loose" letterspacing
- preferredSize  | "large"                               |  Whether to prefer "large" or "small" font-size
+ fonts          |                                       | A list of font-family names or sets of CSS style parameters. If empty, existing fonts are scaled to fit
+ variableFont   |                                       | A font object as in `fonts`, plus optional `axis`, `min`, `max` properties
+ elements       | ".ftw, .font-to-width, .fonttowidth"  | A CSS selector or jQuery object specifying which elements should apply FTW
+ minLetterSpace | -0.04                                 | A very small, probably negative number indicating degree of allowed tightening
+ maxLetterSpace | none                                  | Maximum allowed letterspace stretching when font size maxes out
+ minFontSize    | 1.0                                   | Allow scaling of font-size to this ratio of original
+ maxFontSize    | 1.0                                   | Allow scaling of font-size to this ratio of original
+ preferredFit   | "tight"                               | Whether to prefer "tight" or "loose" letterspacing
+ preferredSize  | "large"                               | Whether to prefer "large" or "small" font-size
 
 ### History
 
-* 2015-03-04
- * Added no-fonts scale-to-width behavior
+* 2018-10-04 Add maxLetterSpace option
+* 2018-02-05 Remove jQuery dependency; better font load detection; add support for variable fonts
+* 2015-03-04 Added no-fonts scale-to-width behavior
 
 * 2015-02-28
  * Added ability to specify complete CSS spec for each font style
