@@ -49,15 +49,15 @@ Name            | Default                               | Description
 * 2015-03-04 Added no-fonts scale-to-width behavior
 
 * 2015-02-28
- * Added ability to specify complete CSS spec for each font style
- * Added min/maxFontSize, preferredFit/Size options
- * Added demo.html for usage hints
- * Support hyphenated-type or camelCaseType options
- * Bugfixes and safer coding style
+  * Added ability to specify complete CSS spec for each font style
+  * Added min/maxFontSize, preferredFit/Size options
+  * Added demo.html for usage hints
+  * Support hyphenated-type or camelCaseType options
+  * Bugfixes and safer coding style
 
 * 2014-03-31 **Initial release**
- * Only option is 'min-letter-space'
- * Fitting errs on the side of tight spacing
+  * Only option is 'min-letter-space'
+  * Fitting errs on the side of tight spacing
 
 
 [Chris Lewis]: http://chrissam42.com/
