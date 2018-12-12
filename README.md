@@ -3,7 +3,7 @@
 Font-To-Width if a small Javascript routine which fits text to the width of an element 
 using multiple font styles of different widths.
 
-© 2014–2015 [Chris Lewis] and [Nick Sherman]
+© 2014–2018 [Chris Lewis] and [Nick Sherman]
 
 Freely made available under the MIT license: http://opensource.org/licenses/MIT
 
