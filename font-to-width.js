@@ -298,73 +298,102 @@ FontToWidth.prototype.updateWidths = function() {
 	}
 
 	if (ftw.mode === 'variable') {
-		//pre-set variable axis to middle value
-		var info = new Array(ftw.allTheElements.length);
-		ftw.allTheElements.forEach(function(el, i) { 
+		var winheight = document.documentElement.clientHeight;
+		
+		var onscreen = [], offscreen = [];
+		
+		//reset elements to their original inline css, if any
+		ftw.allTheElements.forEach(function(el) { 
 			el.style.cssText = el.getAttribute('data-ftw-original-style');
-			var currentStyle = getComputedStyle(el).fontVariationSettings;
-			var axisString = '"' + ftw.options.axis + '" 1';
-			if (currentStyle.length && currentStyle !== 'normal') {
-				el.style.fontVariationSettings += ', ' + axisString;
-			} else {
-				el.style.fontVariationSettings = axisString;
-			}
-			info[i] = {
-				'val': (ftw.options.axisMin + ftw.options.axisMax)/2,
+			var bbox = el.getBoundingClientRect();
+			var info = {
+				'el': el,
+				'val': el.hasAttribute('data-axis-val') ? parseFloat(el.getAttribute('data-axis-val')) : (ftw.options.axisMin + ftw.options.axisMax)/2,
 				'min': ftw.options.axisMin,
 				'max': ftw.options.axisMax,
 				'mille': (ftw.options.axisMax-ftw.options.axisMin)/1000,
 				'done': false
 			};
+			
+			if (bbox.top < winheight && bbox.bottom > 0) {
+				onscreen.push(info);
+			} else {
+				offscreen.push(info);
+			}
 		});
-		
-		//now we go through waves of setting values and then measuring widths
-		var tries = 20, anyLeft = ftw.allTheElements.length;
-		while (anyLeft && tries--) {
-			//update
-			ftw.allTheElements.forEach(function(cell, i) {
-				if (info[i].done) return;
-				updateFVS(cell, info[i].val);
+
+		var doEverything = function(elements) {
+			var newFVS = [];
+			//pre-set variable axis to its former value, or the middle for the first run
+			elements.forEach(function(info, i) { 
+				var currentStyle = getComputedStyle(info.el).fontVariationSettings;
+				var axisString = '"' + ftw.options.axis + '" ' + info.val;
+				newFVS.push(currentStyle.length && currentStyle !== 'normal' ? currentStyle + ", " + axisString : axisString);
 			});
 			
-			//measure
-			ftw.allTheElements.forEach(function(cell, i) {
-				if (info[i].done) return;
-				var span = cell.firstElementChild;
-		
-				var fullwidth = getContentWidth(cell);
-				var textwidth = span.getBoundingClientRect().width;
-		
-				if (info[i].val < info[i].min + info[i].mille) {
-					info[i].val = info[i].min;
-					info[i].done = true;
-					adjustFontSizeAndLetterSpacing(cell);
-					--anyLeft;
-				} else if (info[i].val > info[i].max - info[i].mille) {
-					info[i].val = info[i].max;
-					info[i].done = true;
-					adjustFontSizeAndLetterSpacing(cell);
-					--anyLeft;
-				} else if (Math.abs(fullwidth-textwidth) <= 1) {
-					info[i].done = true;
-					--anyLeft;
-					return;
-				} else if (!isNaN(info[i].previous) && Math.abs(info[i].val - info[i].previous) < info[i].mille) {
-					info[i].done = true;
-					--anyLeft;
-					return;
-				}
-
-				if (fullwidth > textwidth) {
-					info[i].min = info[i].val;
-				} else {
-					info[i].max = info[i].val;
-				}
-				
-				info[i].previous = info[i].val;
-				info[i].val = (info[i].min + info[i].max)/2;
+			elements.forEach(function(info, i) { 
+				info.el.style.fontVariationSettings = newFVS[i];
 			});
-		}
+			
+			//now we go through waves of setting values and then measuring widths
+			var tries = 20, anyLeft = elements.length;
+			
+			while (anyLeft && tries--) {
+				//update
+				var start = Date.now();
+				elements.forEach(function(info) {
+					if (info.done) return;
+					updateFVS(info.el, info.val);
+				});
+	
+				//measure
+				elements.forEach(function(info, i) {
+					if (info.done) return;
+					var span = info.el.firstElementChild;
+						
+					var fullwidth = getContentWidth(info.el);
+					var textwidth = span.getBoundingClientRect().width;
+			
+					if (info.val < info.min + info.mille) {
+						info.val = info.min;
+						info.done = true;
+						adjustFontSizeAndLetterSpacing(info.el);
+						--anyLeft;
+					} else if (info.val > info.max - info.mille) {
+						info.val = info.max;
+						info.done = true;
+						adjustFontSizeAndLetterSpacing(info.el);
+						--anyLeft;
+					} else if (Math.abs(fullwidth-textwidth) <= 1) {
+						info.done = true;
+						--anyLeft;
+						return;
+					} else if (!isNaN(info.previous) && Math.abs(info.val - info.previous) < info.mille) {
+						info.done = true;
+						--anyLeft;
+						return;
+					}
+	
+					if (fullwidth > textwidth) {
+						info.min = info.val;
+					} else {
+						info.max = info.val;
+					}
+					
+					info.previous = info.val;
+					info.val = (info.min + info.max)/2;
+				});
+				var end = Date.now();
+				//console.log(tries, anyLeft, (end-start)/1000);
+			}
+		};
+		
+		//console.log("onscreen");
+		doEverything(onscreen);
+		setTimeout(function() { 
+			//console.log("offscreen"); 
+			doEverything(offscreen); 
+		}, 100);
 	} else {
 		//ftw.fonts is sorted widest first; once we get to a font that fits, we remove that element from the list
 		try {
